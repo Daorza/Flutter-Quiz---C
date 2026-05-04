@@ -14,7 +14,11 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Demo Database',
-      home: Home(),
+      routes: {
+        '/home': (context) => const HomePage(),
+        '/add': (context) => AddScreen(),
+        '/detail': (context) => DetailScreen(),
+      },
     );
   }
 }
