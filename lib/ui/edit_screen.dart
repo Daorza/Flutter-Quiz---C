@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import '../services/firebase_service.dart'; // Sesuaikan path-nya
-import '../models/contact.dart'; // Sesuaikan path-nya
+import '../services/firebase_service.dart';
+import '../models/contact.dart';
 
 class EditScreen extends StatefulWidget {
   @override
@@ -13,7 +13,6 @@ class _EditScreenState extends State<EditScreen> {
   final _formKey = GlobalKey<FormState>();
   final FirebaseService _firebaseService = FirebaseService();
 
-  // Controller
   final namaController = TextEditingController();
   final nimController = TextEditingController();
   final tglController = TextEditingController();
@@ -28,11 +27,8 @@ class _EditScreenState extends State<EditScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 🔥 Ambil data yang dikirim dari dashboard
     final Map<String, dynamic> data =
         ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-
-    // Isi controller dengan data yang ada
     docId = data['id'];
     namaController.text = data['nama'] ?? '';
     nimController.text = data['nim'] ?? '';
@@ -43,19 +39,14 @@ class _EditScreenState extends State<EditScreen> {
     existingImageUrl = data['foto'];
   }
 
+  // ✅ Fungsi-fungsi (sama persis)
   Future<void> pickImage() async {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() {
-        _image = File(picked.path);
-      });
-    }
+    if (picked != null) setState(() => _image = File(picked.path));
   }
 
-  // Fungsi untuk update data ke Firebase
   void handleUpdate() async {
     if (_formKey.currentState!.validate()) {
-      // Kita buat model Mahasiswa untuk memudahkan
       Mahasiswa mhsUpdate = Mahasiswa(
         nama: namaController.text,
         nim: nimController.text,
@@ -65,9 +56,7 @@ class _EditScreenState extends State<EditScreen> {
         alamat: alamatController.text,
         foto: _image != null ? _image!.path : (existingImageUrl ?? ""),
       );
-
       await _firebaseService.updateData(docId!, mhsUpdate.toMap());
-
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Data berhasil diupdate")));
@@ -76,42 +65,53 @@ class _EditScreenState extends State<EditScreen> {
   }
 
   void confirmDelete() {
+    final cs = Theme.of(context).colorScheme;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text("Hapus Data"),
-        content: Text("Yakin ingin menghapus data ini?"),
+        title: const Text("Hapus Data"),
+        content: const Text("Yakin ingin menghapus data ini?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text("Batal"),
+            child: const Text("Batal"),
           ),
           TextButton(
             onPressed: () async {
               await _firebaseService.deleteData(docId!);
-              Navigator.pop(context); // tutup dialog
-              Navigator.pop(context); // kembali ke dashboard
+              Navigator.pop(context);
+              Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text("Data mahasiswa telah dihapus")),
               );
             },
-            child: Text("Hapus", style: TextStyle(color: Colors.red)),
+            child: const Text(
+              "Hapus",
+              style: TextStyle(color: Colors.redAccent),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget buildTextField(String label, TextEditingController controller) {
+  Widget _buildField(
+    BuildContext context,
+    String label,
+    TextEditingController controller,
+    IconData icon,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
         controller: controller,
-        validator: (value) =>
-            value!.isEmpty ? "$label tidak boleh kosong" : null,
+        style: TextStyle(color: isDark ? Colors.white : cs.onSurface),
+        validator: (v) => v!.isEmpty ? "$label tidak boleh kosong" : null,
         decoration: InputDecoration(
           labelText: label,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          prefixIcon: Icon(icon, size: 20),
         ),
       ),
     );
@@ -119,50 +119,117 @@ class _EditScreenState extends State<EditScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text("Edit Mahasiswa"),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text("Edit Mahasiswa"),
         actions: [
-          IconButton(icon: Icon(Icons.delete), onPressed: confirmDelete),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+            onPressed: confirmDelete,
+          ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
           child: Column(
             children: [
+              // 📷 Photo picker
               GestureDetector(
                 onTap: pickImage,
-                child: CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.grey[200],
-                  backgroundImage: _image != null
-                      ? FileImage(_image!)
-                      : (existingImageUrl != null &&
-                                existingImageUrl!.startsWith('http')
-                            ? NetworkImage(existingImageUrl!) as ImageProvider
-                            : null),
-                  child:
-                      (_image == null &&
-                          (existingImageUrl == null || existingImageUrl == ""))
-                      ? Icon(Icons.camera_alt, size: 40)
-                      : null,
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 52,
+                      backgroundColor: cs.surface,
+                      backgroundImage: _image != null
+                          ? FileImage(_image!) as ImageProvider
+                          : (existingImageUrl != null &&
+                                    existingImageUrl!.startsWith('http')
+                                ? NetworkImage(existingImageUrl!)
+                                : null),
+                      child:
+                          (_image == null &&
+                              (existingImageUrl == null ||
+                                  existingImageUrl == ""))
+                          ? Icon(
+                              Icons.person,
+                              size: 48,
+                              color: cs.onSurface.withOpacity(0.3),
+                            )
+                          : null,
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: cs.primary,
+                        ),
+                        child: const Icon(
+                          Icons.camera_alt_rounded,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              SizedBox(height: 20),
-              buildTextField("Nama", namaController),
-              buildTextField("NIM", nimController),
-              buildTextField("Tanggal Lahir", tglController),
-              buildTextField("Hobi", hobiController),
-              buildTextField("Nomor HP", hpController),
-              buildTextField("Alamat", alamatController),
-              SizedBox(height: 20),
+              const SizedBox(height: 24),
+
+              _buildField(
+                context,
+                "Nama",
+                namaController,
+                Icons.person_outline,
+              ),
+              _buildField(context, "NIM", nimController, Icons.badge_outlined),
+              _buildField(
+                context,
+                "Tanggal Lahir",
+                tglController,
+                Icons.calendar_today_outlined,
+              ),
+              _buildField(
+                context,
+                "Hobi",
+                hobiController,
+                Icons.sports_esports_outlined,
+              ),
+              _buildField(
+                context,
+                "Nomor HP",
+                hpController,
+                Icons.phone_outlined,
+              ),
+              _buildField(
+                context,
+                "Alamat",
+                alamatController,
+                Icons.location_on_outlined,
+              ),
+
+              const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
+                height: 50,
                 child: ElevatedButton(
                   onPressed: handleUpdate,
-                  child: Text("Update"),
+                  child: const Text(
+                    "Simpan Perubahan",
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],

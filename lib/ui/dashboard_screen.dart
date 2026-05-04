@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../services/firebase_service.dart'; // Sesuaikan path-nya
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/firebase_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   @override
@@ -8,113 +9,176 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // Panggil service yang sudah Anda buat
   final FirebaseService _firebaseService = FirebaseService();
-
   String searchText = "";
   String selectedHobi = "All";
 
+  // ✅ fungsi logout (sama persis)
+  Future<void> _logout() async {
+    await FirebaseAuth.instance.signOut();
+    Navigator.pushReplacementNamed(context, '/login');
+  }
+
+  void _showDeleteDialog(String id) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Hapus Data"),
+        content: const Text("Apakah Anda yakin ingin menghapus mahasiswa ini?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Batal"),
+          ),
+          TextButton(
+            onPressed: () {
+              _firebaseService.deleteData(id);
+              Navigator.pop(context);
+            },
+            child: const Text(
+              "Hapus",
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Dashboard Mahasiswa"),
-        centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.info_outline),
             onPressed: () => Navigator.pushNamed(context, '/about'),
           ),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: const Text("Logout"),
+                content: const Text("Yakin ingin keluar?"),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("Batal"),
+                  ),
+                  TextButton(
+                    onPressed: _logout,
+                    child: const Text(
+                      "Logout",
+                      style: TextStyle(color: Colors.redAccent),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
       body: Column(
         children: [
-          // 🔍 SEARCH BAR
+          // 🔍 Search
           Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
             child: TextField(
               decoration: InputDecoration(
                 hintText: "Cari nama atau NIM...",
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
                 ),
               ),
-              onChanged: (value) {
-                setState(() {
-                  searchText = value.toLowerCase();
-                });
-              },
+              onChanged: (v) => setState(() => searchText = v.toLowerCase()),
             ),
           ),
 
-          // 🎯 FILTER HOBI
+          // 🎯 Filter
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             child: DropdownButtonFormField<String>(
               value: selectedHobi,
-              items: ["All", "Futsal", "Membaca", "Gaming"]
-                  .map(
-                    (hobi) => DropdownMenuItem(value: hobi, child: Text(hobi)),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                setState(() {
-                  selectedHobi = value!;
-                });
-              },
+              dropdownColor: cs.surface,
               decoration: InputDecoration(
                 labelText: "Filter Hobi",
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
                 ),
               ),
+              items: [
+                "All",
+                "Futsal",
+                "Membaca",
+                "Gaming",
+              ].map((h) => DropdownMenuItem(value: h, child: Text(h))).toList(),
+              onChanged: (v) => setState(() => selectedHobi = v!),
             ),
           ),
 
           const SizedBox(height: 10),
 
-          // 📋 LIST DATA (REAL-TIME DARI FIREBASE)
+          // 📋 List data
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: _firebaseService
-                  .getData(), // Memanggil fungsi dari service Anda
+              stream: _firebaseService.getData(),
               builder: (context, snapshot) {
                 if (snapshot.hasError)
                   return const Center(child: Text("Terjadi kesalahan"));
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                if (snapshot.connectionState == ConnectionState.waiting)
+                  return Center(
+                    child: CircularProgressIndicator(color: cs.primary),
+                  );
 
-                // Ambil dokumen dan filter secara lokal untuk pencarian/hobi
                 var docs = snapshot.data!.docs.where((doc) {
                   var data = doc.data() as Map<String, dynamic>;
-                  bool matchesSearch =
+                  bool matchSearch =
                       data['nama'].toString().toLowerCase().contains(
                         searchText,
                       ) ||
                       data['nim'].toString().contains(searchText);
-                  bool matchesHobi =
+                  bool matchHobi =
                       selectedHobi == "All" || data['hobi'] == selectedHobi;
-                  return matchesSearch && matchesHobi;
+                  return matchSearch && matchHobi;
                 }).toList();
 
                 if (docs.isEmpty)
                   return const Center(child: Text("Data tidak ditemukan"));
 
                 return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
                     var docId = docs[index].id;
                     var data = docs[index].data() as Map<String, dynamic>;
 
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.06)
+                            : cs.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: cs.onSurface.withOpacity(0.08),
+                        ),
+                        boxShadow: isDark
+                            ? []
+                            : [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                       ),
                       child: ListTile(
                         leading: CircleAvatar(
@@ -122,10 +186,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             data['foto'] ?? 'https://via.placeholder.com/150',
                           ),
                         ),
-                        title: Text(data['nama'] ?? '-'),
-                        subtitle: Text(data['nim'] ?? '-'),
+                        title: Text(
+                          data['nama'] ?? '-',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        subtitle: Text(
+                          data['nim'] ?? '-',
+                          style: TextStyle(
+                            color: cs.onSurface.withOpacity(0.5),
+                            fontSize: 12,
+                          ),
+                        ),
                         onTap: () {
-                          // Mengirim data Map + ID ke halaman detail
                           data['id'] = docId;
                           Navigator.pushNamed(
                             context,
@@ -137,7 +212,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              icon: Icon(
+                                Icons.edit_outlined,
+                                color: cs.secondary,
+                                size: 20,
+                              ),
                               onPressed: () {
                                 data['id'] = docId;
                                 Navigator.pushNamed(
@@ -148,11 +227,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               },
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () {
-                                // Konfirmasi hapus
-                                _showDeleteDialog(docId);
-                              },
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.redAccent,
+                                size: 20,
+                              ),
+                              onPressed: () => _showDeleteDialog(docId),
                             ),
                           ],
                         ),
@@ -167,31 +247,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.pushNamed(context, '/add'),
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-
-  // Fungsi pembantu untuk delete
-  void _showDeleteDialog(String id) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Hapus Data"),
-        content: const Text("Apakah Anda yakin ingin menghapus mahasiswa ini?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Batal"),
-          ),
-          TextButton(
-            onPressed: () {
-              _firebaseService.deleteData(id); // Menggunakan service Anda
-              Navigator.pop(context);
-            },
-            child: const Text("Hapus", style: TextStyle(color: Colors.red)),
-          ),
-        ],
+        backgroundColor: cs.primary,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
