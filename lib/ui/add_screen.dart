@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import '../services/firebase_service.dart'; // Sesuaikan path-nya
+import '../models/contact.dart'; // Sesuaikan path-nya
 
 class AddScreen extends StatefulWidget {
   @override
@@ -9,6 +11,7 @@ class AddScreen extends StatefulWidget {
 
 class _AddScreenState extends State<AddScreen> {
   final _formKey = GlobalKey<FormState>();
+  final FirebaseService _firebaseService = FirebaseService();
 
   final namaController = TextEditingController();
   final nimController = TextEditingController();
@@ -25,6 +28,40 @@ class _AddScreenState extends State<AddScreen> {
       setState(() {
         _image = File(picked.path);
       });
+    }
+  }
+
+  // Fungsi untuk memproses penyimpanan ke Firebase
+  void _saveData() async {
+    if (_formKey.currentState!.validate()) {
+      // 1. Buat objek Mahasiswa dari inputan
+      // Catatan: Karena kita belum setup Firebase Storage,
+      // sementara kita simpan path lokal atau string kosong untuk foto.
+      Mahasiswa mhsBaru = Mahasiswa(
+        nama: namaController.text,
+        nim: nimController.text,
+        tanggalLahir: tglController.text,
+        hobi: hobiController.text,
+        noHp: hpController.text,
+        alamat: alamatController.text,
+        foto: _image != null ? _image!.path : "",
+      );
+
+      try {
+        // 2. Panggil fungsi addData dari service Anda
+        await _firebaseService.addData(mhsBaru.toMap());
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Data berhasil disimpan ke Firebase")),
+        );
+
+        // 3. Kembali ke Dashboard
+        Navigator.pop(context);
+      } catch (e) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Gagal menyimpan data: $e")));
+      }
     }
   }
 
@@ -46,10 +83,9 @@ class _AddScreenState extends State<AddScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Tambah Mahasiswa")),
-
+      appBar: AppBar(title: const Text("Tambah Mahasiswa")),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
           child: Column(
@@ -59,14 +95,19 @@ class _AddScreenState extends State<AddScreen> {
                 onTap: pickImage,
                 child: CircleAvatar(
                   radius: 50,
+                  backgroundColor: Colors.grey[200],
                   backgroundImage: _image != null ? FileImage(_image!) : null,
                   child: _image == null
-                      ? Icon(Icons.camera_alt, size: 40)
+                      ? const Icon(
+                          Icons.camera_alt,
+                          size: 40,
+                          color: Colors.grey,
+                        )
                       : null,
                 ),
               ),
 
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
 
               buildTextField("Nama", namaController),
               buildTextField("NIM", nimController),
@@ -75,22 +116,23 @@ class _AddScreenState extends State<AddScreen> {
               buildTextField("Nomor HP", hpController),
               buildTextField("Alamat", alamatController),
 
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
 
               // 💾 SIMPAN
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      // nanti connect Firebase
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Data disimpan (dummy)")),
-                      );
-                      Navigator.pop(context);
-                    }
-                  },
-                  child: Text("Simpan"),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: _saveData, // Panggil fungsi simpan
+                  child: const Text(
+                    "Simpan Data",
+                    style: TextStyle(fontSize: 16),
+                  ),
                 ),
               ),
             ],

@@ -1,8 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class FirebaseService {
-  final CollectionReference mahasiswa =
-      FirebaseFirestore.instance.collection('mahasiswa');
+  final CollectionReference mahasiswa = FirebaseFirestore.instance.collection(
+    'mahasiswa',
+  );
 
   Future<void> addData(Map<String, dynamic> data) async {
     await mahasiswa.add(data);

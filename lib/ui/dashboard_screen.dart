@@ -1,4 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../services/firebase_service.dart'; // Sesuaikan path-nya
 
 class DashboardScreen extends StatefulWidget {
   @override
@@ -6,70 +8,11 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final List<Map<String, String>> allData = [
-    {
-      'foto': 'https://i.pravatar.cc/150?img=1',
-      'nama': 'Budi Santoso',
-      'nim': '123456789',
-      'tanggal_lahir': '2002-05-10',
-      'hobi': 'Futsal',
-      'no_hp': '08123456789',
-      'alamat': 'Jakarta',
-    },
-    {
-      'foto': 'https://i.pravatar.cc/150?img=2',
-      'nama': 'Siti Aminah',
-      'nim': '987654321',
-      'tanggal_lahir': '2001-11-22',
-      'hobi': 'Membaca',
-      'no_hp': '08234567890',
-      'alamat': 'Bandung',
-    },
-    {
-      'foto': 'https://i.pravatar.cc/150?img=3',
-      'nama': 'Andi Wijaya',
-      'nim': '1122334455',
-      'tanggal_lahir': '2000-03-15',
-      'hobi': 'Gaming',
-      'no_hp': '08345678901',
-      'alamat': 'Surabaya',
-    },
-  ];
-
-  List<Map<String, String>> filteredData = [];
+  // Panggil service yang sudah Anda buat
+  final FirebaseService _firebaseService = FirebaseService();
 
   String searchText = "";
   String selectedHobi = "All";
-
-  @override
-  void initState() {
-    super.initState();
-    filteredData = List.from(allData); // ✔ fix copy list
-  }
-
-  void applyFilter() {
-    List<Map<String, String>> temp = List.from(allData);
-
-    // 🔍 SEARCH
-    if (searchText.isNotEmpty) {
-      temp = temp.where((item) {
-        return item['nama']!.toLowerCase().contains(searchText.toLowerCase()) ||
-            item['nim']!.contains(searchText);
-      }).toList();
-    }
-
-    // 🎯 FILTER HOBI
-    if (selectedHobi != "All") {
-      temp = temp.where((item) => item['hobi'] == selectedHobi).toList();
-    }
-
-    // 🔤 SORT
-    temp.sort((a, b) => a['nama']!.compareTo(b['nama']!));
-
-    setState(() {
-      filteredData = temp;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -78,19 +21,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: const Text("Dashboard Mahasiswa"),
         centerTitle: true,
         actions: [
-          // ℹ️ ABOUT BUTTON
           IconButton(
             icon: const Icon(Icons.info_outline),
-            onPressed: () {
-              Navigator.pushNamed(context, '/about');
-            },
+            onPressed: () => Navigator.pushNamed(context, '/about'),
           ),
         ],
       ),
-
       body: Column(
         children: [
-          // 🔍 SEARCH
+          // 🔍 SEARCH BAR
           Padding(
             padding: const EdgeInsets.all(10),
             child: TextField(
@@ -102,13 +41,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               onChanged: (value) {
-                searchText = value;
-                applyFilter();
+                setState(() {
+                  searchText = value.toLowerCase();
+                });
               },
             ),
           ),
 
-          // 🎯 FILTER
+          // 🎯 FILTER HOBI
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: DropdownButtonFormField<String>(
@@ -119,8 +59,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   )
                   .toList(),
               onChanged: (value) {
-                selectedHobi = value!;
-                applyFilter();
+                setState(() {
+                  selectedHobi = value!;
+                });
               },
               decoration: InputDecoration(
                 labelText: "Filter Hobi",
@@ -133,73 +74,124 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           const SizedBox(height: 10),
 
-          // 📋 LIST
+          // 📋 LIST DATA (REAL-TIME DARI FIREBASE)
           Expanded(
-            child: ListView.builder(
-              itemCount: filteredData.length,
-              itemBuilder: (context, index) {
-                final mhs = filteredData[index];
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _firebaseService
+                  .getData(), // Memanggil fungsi dari service Anda
+              builder: (context, snapshot) {
+                if (snapshot.hasError)
+                  return const Center(child: Text("Terjadi kesalahan"));
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: NetworkImage(mhs['foto'] ?? ''),
-                    ),
-                    title: Text(mhs['nama'] ?? '-'),
-                    subtitle: Text(mhs['nim'] ?? '-'),
+                // Ambil dokumen dan filter secara lokal untuk pencarian/hobi
+                var docs = snapshot.data!.docs.where((doc) {
+                  var data = doc.data() as Map<String, dynamic>;
+                  bool matchesSearch =
+                      data['nama'].toString().toLowerCase().contains(
+                        searchText,
+                      ) ||
+                      data['nim'].toString().contains(searchText);
+                  bool matchesHobi =
+                      selectedHobi == "All" || data['hobi'] == selectedHobi;
+                  return matchesSearch && matchesHobi;
+                }).toList();
 
-                    // Tap untuk ke Detail
-                    onTap: () {
-                      Navigator.pushNamed(context, '/detail', arguments: mhs);
-                    },
+                if (docs.isEmpty)
+                  return const Center(child: Text("Data tidak ditemukan"));
 
-                    // Aksi di sebelah kanan
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize
-                          .min, // Penting agar Row tidak makan tempat ke samping
-                      children: [
-                        // Tombol EDIT
-                        IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.blue),
-                          onPressed: () {
-                            Navigator.pushNamed(
-                              context,
-                              '/edit',
-                              arguments: mhs,
-                            );
-                          },
+                return ListView.builder(
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    var docId = docs[index].id;
+                    var data = docs[index].data() as Map<String, dynamic>;
+
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundImage: NetworkImage(
+                            data['foto'] ?? 'https://via.placeholder.com/150',
+                          ),
                         ),
-                        // Tombol DELETE
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () {
-                            // Tambahkan logika delete kamu di sini, misal:
-                            // _deleteMahasiswa(mhs['id']);
-                          },
+                        title: Text(data['nama'] ?? '-'),
+                        subtitle: Text(data['nim'] ?? '-'),
+                        onTap: () {
+                          // Mengirim data Map + ID ke halaman detail
+                          data['id'] = docId;
+                          Navigator.pushNamed(
+                            context,
+                            '/detail',
+                            arguments: data,
+                          );
+                        },
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              onPressed: () {
+                                data['id'] = docId;
+                                Navigator.pushNamed(
+                                  context,
+                                  '/edit',
+                                  arguments: data,
+                                );
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () {
+                                // Konfirmasi hapus
+                                _showDeleteDialog(docId);
+                              },
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
                 );
               },
             ),
           ),
         ],
       ),
-
-      // ➕ ADD
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.pushNamed(context, '/add');
-        },
+        onPressed: () => Navigator.pushNamed(context, '/add'),
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  // Fungsi pembantu untuk delete
+  void _showDeleteDialog(String id) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Hapus Data"),
+        content: const Text("Apakah Anda yakin ingin menghapus mahasiswa ini?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Batal"),
+          ),
+          TextButton(
+            onPressed: () {
+              _firebaseService.deleteData(id); // Menggunakan service Anda
+              Navigator.pop(context);
+            },
+            child: const Text("Hapus", style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }

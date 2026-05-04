@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase/ui/dashboard_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase/ui/register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -9,6 +11,39 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool isObscure = true;
 
+  // ✅ controller input
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+
+  // ✅ fungsi login
+  Future<void> login() async {
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
+      );
+
+      // kalau berhasil → ke dashboard
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => DashboardScreen()),
+      );
+    } on FirebaseAuthException catch (e) {
+      String message = "Login gagal";
+
+      if (e.code == 'user-not-found') {
+        message = "User tidak ditemukan";
+      } else if (e.code == 'wrong-password') {
+        message = "Password salah";
+      } else if (e.code == 'invalid-email') {
+        message = "Format email tidak valid";
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -16,7 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
         width: double.infinity,
         height: double.infinity,
 
-        // 🌈 Background gradient biar modern
+        // 🌈 Background gradient
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [Colors.blueAccent, Colors.lightBlue],
@@ -59,6 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         children: [
                           // EMAIL
                           TextField(
+                            controller: emailController, // ✅ ditambahkan
                             decoration: InputDecoration(
                               labelText: "Email",
                               prefixIcon: Icon(Icons.email),
@@ -71,6 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                           // PASSWORD
                           TextField(
+                            controller: passwordController, // ✅ ditambahkan
                             obscureText: isObscure,
                             decoration: InputDecoration(
                               labelText: "Password",
@@ -111,13 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             width: double.infinity,
                             height: 50,
                             child: ElevatedButton(
-                              onPressed: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) => DashboardScreen(),
-                                  ),
-                                );
-                              },
+                              onPressed: login, // ✅ pakai fungsi login
                               style: ElevatedButton.styleFrom(
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
@@ -131,6 +162,17 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
                       ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => RegisterScreen(),
+                          ),
+                        );
+                      },
+                      child: Text("Belum punya akun? Register"),
                     ),
 
                     SizedBox(height: 20),
